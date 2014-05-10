@@ -33,12 +33,12 @@ class ChartMaker(object):
 
     CURR_DIR  = os.path.dirname(__file__)
 
-    HTML_FOOTER = ");" +\
+    HTML_FOOTER = ");});" +\
 				  "      </script>" +\
 				  "   </head>" +\
 				  "   <body>" +\
-				  '<script src="%s/../../js/highcharts.js"></script>' +\
-				  '<script src="../../js/modules/exporting.js"></script>' +\
+				  '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
+				  '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR +\
                   '<div id="container" style="min-width: 310px; height: 400px; margin: 0 auto"></div>' +\
 				  "   </body>" +\
 				  "</html>"
