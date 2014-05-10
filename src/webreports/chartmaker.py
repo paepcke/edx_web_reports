@@ -3,6 +3,8 @@ Created on May 8, 2014
 
 @author: paepcke
 '''
+import os
+
 
 class ChartTypes:
     COLUMN = 'column'
@@ -24,17 +26,19 @@ class ChartMaker(object):
     			'     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n' +\
     			"     <title>OpenEdx Chart</title>\n" +\
 			    "\n" +\
-    			'     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.html"></script>\n' +\
+    			'     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
     			'     <script type="text/javascript">\n' +\
                 " $(function () {\n" +\
                 "     $('#container').highcharts({\n"
+
+    CURR_DIR  = os.path.dirname(__file__)
 
     HTML_FOOTER = ");" +\
 				  "      </script>" +\
 				  "   </head>" +\
 				  "   <body>" +\
-				  '<script src="../../html/highcharts.html"></script>' +\
-				  '<script src="../../html/modules/exporting.html"></script>' +\
+				  '<script src="%s/../../js/highcharts.js"></script>' +\
+				  '<script src="../../js/modules/exporting.js"></script>' +\
                   '<div id="container" style="min-width: 310px; height: 400px; margin: 0 auto"></div>' +\
 				  "   </body>" +\
 				  "</html>"
