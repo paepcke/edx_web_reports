@@ -20,62 +20,94 @@ class ChartMaker(object):
     classdocs
     '''
 
-    JS_HEADER = "<!DOCTYPE HTML>\n" +\
-                "<html>\n" +\
-    			" <head>\n" +\
-    			'     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n' +\
-    			"     <title>OpenEdx Chart</title>\n" +\
-			    "\n" +\
-    			'     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
-    			'     <script type="text/javascript">\n' +\
-                " $(function () {\n" +\
-                "     $('#container').highcharts({\n"
+    HTML_HEADER = "<!DOCTYPE HTML>\n" +\
+                  "<funcDef>\n" +\
+    			  " <head>\n" +\
+    			  '     <meta http-equiv="Content-Type" content="text/funcDef; charset=utf-8">\n' +\
+    			  "     <title>OpenEdx Chart</title>\n" +\
+			      "\n" +\
+    			  '     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
+    			  '     <script type="text/javascript">\n'
+    CHART_FUNC_HEADER = " $(function () {\n" +\
+                        "     $('#%s').highcharts({\n"
 
+    CHART_FUNC_FOOTER = "});});"
     CURR_DIR  = os.path.dirname(__file__)
 
-    HTML_FOOTER = ");});" +\
-				  "      </script>" +\
-				  "   </head>" +\
-				  "   <body>" +\
-				  '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
-				  '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR +\
-                  '<div id="container" style="min-width: 310px; height: 400px; margin: 0 auto"></div>' +\
-				  "   </body>" +\
-				  "</html>"
+    HTML_END_FUNC_DEFS = "      </script>" +\
+				       "   </head>" +\
+				       "   <body>" +\
+				       '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
+				       '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR
 
+    CHART_DIV   = '<div id="%s" style="min-width: 310px; height: 400px; margin: 0 auto"></div>'
+    
+    
+    HTML_END	=  "   </body></html>"
 
+    CHART_NAME_INDEX = 0
+
+    @classmethod
+    def makeWebPage(cls, chartObjArr):
+        html = ChartMaker.HTML_HEADER
+        for chartObj in chartObjArr:
+            html += chartObj.getChartFuncSource()
+        html += ChartMaker.HTML_END_FUNC_DEFS
+
+        for chartObj in chartObjArr:
+            html += ChartMaker.CHART_DIV % chartObj.getInternalName() 
+
+        return html
 
     def __init__(self):
         '''
         Constructor
         '''
-        self.html = ChartMaker.JS_HEADER
+        self.internalChartName = 'chart%d' % ChartMaker.CHART_NAME_INDEX
+        ChartMaker.CHART_NAME_INDEX += 1
+        self.thisChartFuncHeader = ChartMaker.CHART_FUNC_HEADER % self.internalChartName
+        
+        self.funcDef = self.thisChartFuncHeader
+
+    def getChartFuncSource(self):
+        return self.funcDef + ChartMaker.CHART_FUNC_FOOTER
+
+    def getInternalName(self):
+        return self.internalChartName
     
     def add(self, javascriptStr):
-        self.html += javascriptStr
+        self.funcDef += javascriptStr
+
+    def backtrack(self, numChars=1):
+        self.funcDef = self.funcDef[:-numChars]
+
+    def addAllSeries(self, seriesArray):
+        '''
         
-    def closeJs(self):
-        self.add('}')
-        self.html += ChartMaker.HTML_FOOTER
-        return self.html
-    
-    def getHTML(self):
-        return self.html
-    
+        :param seriesArray: array of DataSeries objects
+        :type seriesArray: [DataSeries]
+        '''
+        self.add('series: [')
+        for seriesObj in seriesArray:
+            self.add(str(seriesObj) + ',')
+        # Remove last comma:
+        self.backtrack()
+        self.add(']')
+        
     def createViz(self, chartType, title):
         self.add("chart: {type: '%s' },\n" % chartType)
         self.add("title: {text: '%s'},\n" % title)
         
-class HistogramMaker(ChartMaker):
+class Histogram(ChartMaker):
     
-    def __init__(self, xAxisLabelArr, counts, chartTitle):
-        super(HistogramMaker, self).__init__()
+    def __init__(self, chartTitle, xAxisTitle, xAxisLabelArr, counts):
+        super(Histogram, self).__init__()
         self.xAxisLabelArr = xAxisLabelArr
         self.counts = counts
         
         series = DataSeries('Correct', counts)
         xAxis = Axis(axisDir='x', 
-                     titleText='Correct answers',
+                     titleText=xAxisTitle,
                      labelArr = xAxisLabelArr,
                      )
         
@@ -87,9 +119,8 @@ class HistogramMaker(ChartMaker):
                      
         self.createViz('column', chartTitle)
         self.add(str(xAxis) + ',')
-        self.add(str(yAxis))
-        self.closeJs()
-        
+        self.add(str(yAxis) + ',')
+        self.addAllSeries([series])
         
 class Axis(object):
     
@@ -128,8 +159,8 @@ class DataSeries(object):
         
     def __str__(self):
         res = ''
-        res += "{name: '%s',\n}" % self.seriesType['name']
-        res += "data: %s}" % str(self.seriesDict['dataArr']) 
+        res += "{name: '%s',\n" % self.seriesDict['name']
+        res += "data: %s}" % str(self.seriesDict['data']) 
         return res
         
 class Tooltip(object):
