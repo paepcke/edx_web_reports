@@ -194,9 +194,9 @@ class Histogram(ChartMaker):
     '''
     A histogram maker
     '''
-    def __init__(self, chartTitle, xAxisTitle, histogramData):
+    def __init__(self, chartTitle, xAxisTitle, xAxisLabels, histogramDataSeries):
         '''
-        Special subclass for making histograms. The histogramData
+        Special subclass for making histograms. The histogramDataSeries
         is a dictionary. If it is an OrderedDict then the order
         will map to the columns from left to right. If it is
         a regular dict, then the order along the x-axis depends
@@ -206,27 +206,30 @@ class Histogram(ChartMaker):
         :type chartTitle: String
         :param xAxisTitle: x-Axis name
         :type xAxisTitle: String
-        :param histogramData: [ordered] dictionary of x axis labels and counts 
-        :type histogramData: {String : {int | float}}
+        :param xAxisLabels: array of labels, one for each column
+        :type xAxisLabels: [String]
+        :param histogramDataSeries: DataSeries containing all counts.
+        :type histogramDataSeries: DataSeries
         '''
         super(Histogram, self).__init__()
         
-        series = DataSeries(xAxisTitle, histogramData.values())
         xAxis = Axis(axisDir='x', 
                      titleText=xAxisTitle,
-                     labelArr = histogramData.keys(),
+                     #******labelArr = [histogramDataSeriesArr.name()],
+                     labelArr = xAxisLabels
                      )
         
         yAxis = Axis(axisDir='y',
                      titleText='Count',
-                     dataSeriesArr=series
+                     dataSeriesArr=[histogramDataSeries]
                      )
                      
         # Start a chart function:  
         self.createViz(chartTitle, {'type' : "'column'"})
         self.add(str(xAxis) + ',')
         self.add(str(yAxis) + ',')
-        self.addAllSeries([series])
+        self.add("legend: {enabled : false},")
+        self.addAllSeries([histogramDataSeries])
         
         
 
@@ -234,7 +237,17 @@ class Histogram(ChartMaker):
         
 class Pie(ChartMaker):
     
-    def __init__(self, chartTitle, pieSectionsDataDict):
+    def __init__(self, chartTitle, pieDataSeriesObjArr):
+        '''
+        Build a pie chart. Can control chart title, slice
+        size (in percent), and slice name for each slice.
+        Slice names appear in callouts next to each slice.
+        
+        :param chartTitle: title to appear above the chart
+        :type chartTitle: String
+        :param pieDataSeriesObjArr: DataSeries obj array containing a name and single-element number for each slice
+        :type pieDataSeriesObjArr: [DataSeries]
+        '''
         super(Pie, self).__init__()
 
         # Start the function string, taking
@@ -262,8 +275,17 @@ class Pie(ChartMaker):
         self.add("type: 'pie',")
         self.add("name: '%s'," % self.internalChartName)
         self.add("data: [")
-        for pieSectionKey in pieSectionsDataDict:
-            self.add("['%s', %s]," % (pieSectionKey, pieSectionsDataDict[pieSectionKey]))
+
+        for pieSliceDataSeries in pieDataSeriesObjArr:
+            if len(pieSliceDataSeries['data']) != 1:
+                raise ValueError("Pie charts need exactly one data value for each slice.")
+            sliceSize = pieSliceDataSeries['data'][0]
+            try:
+                sliceCallout =  pieSliceDataSeries['name']
+            except KeyError:
+                raise ValueError("Pie chart needs a slice name for each slice.")
+            self.add("['%s', %s]," % (sliceCallout, sliceSize))
+
         self.backtrack() # remove trailing comma left by loop
         self.add(']')  # close 'data: [': array of attr/value arrays 
         self.add("}]") # close 'series: [{'
@@ -285,8 +307,6 @@ class Line(ChartMaker):
         '''
         super(Line, self).__init__()
         
-        #******series = DataSeries(yAxisTitle, lineData.values())
-
         if not isinstance(lineSeriesObjArray, list):
             lineSeriesObjArray = [lineSeriesObjArray]
 
@@ -413,10 +433,10 @@ class DataSeries(BasicDict):
     Holds one data series
     '''
     
-    def __init__(self, seriesName, dataArr, seriesType=None):
+    def __init__(self, dataArr, legendLabel='', seriesType=None):
         super(DataSeries, self).__init__()
         
-        self['name'] = seriesName
+        self['name'] = legendLabel
         self['data'] = dataArr
         
         if seriesType is not None:

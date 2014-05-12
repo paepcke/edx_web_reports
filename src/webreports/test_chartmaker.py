@@ -12,7 +12,7 @@ from chartmaker import ChartMaker, Histogram, Pie, Line, DataSeries
 from htmlmin.minify import html_minify
 
 
-DO_ALL = False
+DO_ALL = True
 
 class TestChartMaker(unittest.TestCase):
     
@@ -23,17 +23,18 @@ class TestChartMaker(unittest.TestCase):
         self.numWrong = histogramSeries.count(0)
         self.numRight = len(histogramSeries) - self.numWrong
         
-        self.pieData = OrderedDict(
-                                   [
-                                    ('Europe', 20),
-                                    ('Asia', 40),
-                                    ('US', 35),
-                                    ('Other', 5)
-                                    ])
+        
+        self.histogramData = DataSeries([self.numRight, self.numWrong])
+                             
+        self.pieData  = [DataSeries([20], legendLabel='Europe'),
+                         DataSeries([40], legendLabel='Asia'),
+                         DataSeries([35], legendLabel='US'),
+                         DataSeries([5],  legendLabel='Other'),
+                         ]
 
-        self.lineData = [DataSeries('CS101', [1,3,5,7,9,11]),
-                         DataSeries('CS144', [5,9,3,1,1,7]),
-                         DataSeries('CS140',  [7,5,3]),
+        self.lineData = [DataSeries([1,3,5,7,9,11], legendLabel='CS101'),
+                         DataSeries([5,9,3,1,1,7], legendLabel='CS144'),
+                         DataSeries([7,5,3], legendLabel='CS140'),
                          ]
         self.xAxisLabels = ['Spring 2012', 'Fall 2012', 'Spring 2013', 'Fall 2013', 'Spring 2014', 'Summer 2014']
         
@@ -47,8 +48,9 @@ class TestChartMaker(unittest.TestCase):
     @skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
     def testHistogram(self):
         histChart = Histogram('Testchart', 
-                              'Correctness', 
-                              OrderedDict([('correct', self.numRight), ('incorrect', self.numWrong)]))
+                              'Correctness',
+                              ['correct', 'incorrect'],
+                              self.histogramData)
         html = ChartMaker.makeWebPage(histChart)
         #print(html)
         htmlNoCR = re.sub('\n','',html)
@@ -58,7 +60,7 @@ class TestChartMaker(unittest.TestCase):
             groundTruth = fd.read()
         self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
 
-    #******8@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
+    @skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
     def testPie(self):
         pieChart = Pie('Participant Origin', self.pieData)
         html = ChartMaker.makeWebPage(pieChart)
@@ -77,7 +79,7 @@ class TestChartMaker(unittest.TestCase):
         #print(html)
         htmlNoCR = re.sub('\n','',html)
         htmlMinimized = html_minify(htmlNoCR)
-        print(htmlMinimized)
+        #print(htmlMinimized)
         with open('data/testLineGroundTruth.txt', 'r') as fd:
             groundTruth = fd.read()
         self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
