@@ -3,11 +3,16 @@ Created on May 8, 2014
 
 @author: paepcke
 '''
+from collections import OrderedDict
 import re
+from unittest import skipIf
 import unittest
 
-from chartmaker import ChartMaker, Histogram
+from chartmaker import ChartMaker, Histogram, Pie, Line, DataSeries
 from htmlmin.minify import html_minify
+
+
+DO_ALL = False
 
 class TestChartMaker(unittest.TestCase):
     
@@ -17,10 +22,34 @@ class TestChartMaker(unittest.TestCase):
         histogramSeries = [0,0,1,1,0,1,1,1,3,1,1,3,1,1,1,1,1,3,2,2,1,3,0,1,1,1,1,1,1,0,1,0,0,1,0,1,1,1,0,1,1,1,1]
         self.numWrong = histogramSeries.count(0)
         self.numRight = len(histogramSeries) - self.numWrong
+        
+        self.pieData = OrderedDict(
+                                   [
+                                    ('Europe', 20),
+                                    ('Asia', 40),
+                                    ('US', 35),
+                                    ('Other', 5)
+                                    ])
 
+        self.lineData = [DataSeries('CS101', [1,3,5,7,9,11]),
+                         DataSeries('CS144', [5,9,3,1,1,7]),
+                         DataSeries('CS140',  [7,5,3]),
+                         ]
+        self.xAxisLabels = ['Spring 2012', 'Fall 2012', 'Spring 2013', 'Fall 2013', 'Spring 2014', 'Summer 2014']
+        
+    def tearDown(self):
+        # Make sure that the automatically generated chart 
+        # names: chart0, chart1, ... start at 0 for each test.
+        # Else the ground truth files will be wrong.
+        
+        ChartMaker.CHART_NAME_INDEX = 0
+
+    @skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
     def testHistogram(self):
-        histChart = Histogram('Testchart', 'Correctness', ['correct', 'incorrect'], [self.numRight, self.numWrong])
-        html = ChartMaker.makeWebPage([histChart])
+        histChart = Histogram('Testchart', 
+                              'Correctness', 
+                              OrderedDict([('correct', self.numRight), ('incorrect', self.numWrong)]))
+        html = ChartMaker.makeWebPage(histChart)
         #print(html)
         htmlNoCR = re.sub('\n','',html)
         htmlMinimized = html_minify(htmlNoCR)
@@ -29,12 +58,43 @@ class TestChartMaker(unittest.TestCase):
             groundTruth = fd.read()
         self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
 
+    #******8@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
+    def testPie(self):
+        pieChart = Pie('Participant Origin', self.pieData)
+        html = ChartMaker.makeWebPage(pieChart)
+        #print(html)
+        htmlNoCR = re.sub('\n','',html)
+        htmlMinimized = html_minify(htmlNoCR)
+        #print(htmlMinimized)
+        with open('data/testPieGroundTruth.txt', 'r') as fd:
+            groundTruth = fd.read()
+        self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
+        
+    @skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
+    def testLine(self):
+        lineChart = Line('Percent Finishing to Certificate', self.xAxisLabels, 'Completion (%)', self.lineData)
+        html = ChartMaker.makeWebPage(lineChart)
+        #print(html)
+        htmlNoCR = re.sub('\n','',html)
+        htmlMinimized = html_minify(htmlNoCR)
+        print(htmlMinimized)
+        with open('data/testLineGroundTruth.txt', 'r') as fd:
+            groundTruth = fd.read()
+        self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
+
+
+
+
+
+    # --------------------------  Support Functions ------------------
+
     def removeLocalPart(self, aString):
         '''
         To compare ground truth to computed results, all
         string pieces that depend on the computer on which 
         the test is run need to be removed from both the
         computed string, and ground truth.
+
         :param aString: string from which to remove locality dependent pieces
         :type aString: String
         :return: cleaned up string

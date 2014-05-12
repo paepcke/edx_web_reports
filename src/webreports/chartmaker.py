@@ -4,6 +4,7 @@ Created on May 8, 2014
 @author: paepcke
 '''
 import os
+from collections import MutableMapping
 
 
 class ChartTypes:
@@ -74,9 +75,14 @@ class ChartMaker(object):
         i.e. of ChartMaker subclasses:
         :param cls: ChartMaker class object
         :type cls: ChartMaker
-        :param chartObjArr: array of previously created chart objects
-        :type chartObjArr: [Subclasses of ChartMaker]
+        :param chartObjArr: array of previously created chart objects. 
+            Individual chart object works as well. 
+        :type chartObjArr: {[Subclasses of ChartMaker] | Subclasses of ChartMaker}
         '''
+        
+        if not isinstance(chartObjArr, list):
+            chartObjArr = [chartObjArr]
+        
         # HTML up to chart function defs in <head>:
         html = ChartMaker.HTML_HEADER
         # Add each chart function definition:
@@ -145,6 +151,7 @@ class ChartMaker(object):
         add them to the function body. Data series
         are yAxis values. Can have multiple for charts
         like column charts:
+
         :param seriesArray: all data series objects to add. 
         :type seriesArray: [DataSeries]
         '''
@@ -155,15 +162,28 @@ class ChartMaker(object):
         self.backtrack()
         self.add(']')
         
-    def createViz(self, chartType, title):
+    def createViz(self, title, chartArgs):
         '''
         Start of data structure for all Highchart functions.
-        :param chartType: type of chart: 'column', 'pie', etc.
-        :type chartType: String
+
         :param title: title of entire chart. Will be printed above the chart
         :type title: String
+        :param chartArgs: dict with attribute value pairs. Ex::
+                {'type' : 'column'}
+            for column charts, or:: 
+                {
+                plotBackgroundColor: null,
+                plotBorderWidth: null,
+                plotShadow: false
+                }
+            for pie charts.
+        :type chartArg: {String : String}
         '''
-        self.add("chart: {type: '%s' },\n" % chartType)
+        self.add('chart: ' + '{')
+        for argKey in chartArgs.keys():
+            self.add(argKey + ': ' + chartArgs[argKey] + ',')
+        self.backtrack()
+        self.add('},')
         self.add("title: {text: '%s'},\n" % title)
 
 # ---------------------------------------  Chart Class Histogram ----------------------------        
@@ -174,27 +194,27 @@ class Histogram(ChartMaker):
     '''
     A histogram maker
     '''
-    
-    def __init__(self, chartTitle, xAxisTitle, xAxisLabelArr, counts):
+    def __init__(self, chartTitle, xAxisTitle, histogramData):
         '''
-        Special subclass for making histograms.
+        Special subclass for making histograms. The histogramData
+        is a dictionary. If it is an OrderedDict then the order
+        will map to the columns from left to right. If it is
+        a regular dict, then the order along the x-axis depends
+        on the Python implementation. 
+
         :param chartTitle: Title to print underneath the chart
         :type chartTitle: String
         :param xAxisTitle: x-Axis name
         :type xAxisTitle: String
-        :param xAxisLabelArr: labels along the x-Axis
-        :type xAxisLabelArr: [String]
-        :param counts: y-values
-        :type counts: DataSeries
+        :param histogramData: [ordered] dictionary of x axis labels and counts 
+        :type histogramData: {String : {int | float}}
         '''
         super(Histogram, self).__init__()
-        self.xAxisLabelArr = xAxisLabelArr
-        self.counts = counts
         
-        series = DataSeries('Correct', counts)
+        series = DataSeries(xAxisTitle, histogramData.values())
         xAxis = Axis(axisDir='x', 
                      titleText=xAxisTitle,
-                     labelArr = xAxisLabelArr,
+                     labelArr = histogramData.keys(),
                      )
         
         yAxis = Axis(axisDir='y',
@@ -202,8 +222,8 @@ class Histogram(ChartMaker):
                      dataSeriesArr=series
                      )
                      
-        # Start a chart function:             
-        self.createViz('column', chartTitle)
+        # Start a chart function:  
+        self.createViz(chartTitle, {'type' : "'column'"})
         self.add(str(xAxis) + ',')
         self.add(str(yAxis) + ',')
         self.addAllSeries([series])
@@ -214,43 +234,131 @@ class Histogram(ChartMaker):
         
 class Pie(ChartMaker):
     
-    def __init__(self):
+    def __init__(self, chartTitle, pieSectionsDataDict):
         super(Pie, self).__init__()
-# ---------------------------------------  Service Classes ----------------------------        
 
+        # Start the function string, taking
+        # care of the 'chart' and 'title' entries:
+        self.createViz(chartTitle, {'plotBackgroundColor' : 'null',
+                                    'plotBorderWidth' : 'null',
+                                    'plotShadow' : 'false'
+                                    })
+
+        self.add("plotOptions: {" +
+                 "pie: {" +
+                     "allowPointSelect: true," +
+                     "cursor: 'pointer'," +
+                     "dataLabels: {" +
+                         "enabled: true," +
+                         "format: '<b>{point.name}</b>: {point.percentage:.1f} %'," +
+                         "style: {" +
+                             "color: (Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black'" +
+                             "}"
+                        "}" +
+                    "}" + # close pie:...
+                  "},") # close plotOptions
+                 
+        self.add('series: [{')
+        self.add("type: 'pie',")
+        self.add("name: '%s'," % self.internalChartName)
+        self.add("data: [")
+        for pieSectionKey in pieSectionsDataDict:
+            self.add("['%s', %s]," % (pieSectionKey, pieSectionsDataDict[pieSectionKey]))
+        self.backtrack() # remove trailing comma left by loop
+        self.add(']')  # close 'data: [': array of attr/value arrays 
+        self.add("}]") # close 'series: [{'
+
+
+class Line(ChartMaker):
+    
+    def __init__(self, chartTitle, xAxisLabels, yAxisTitle, lineSeriesObjArray):
+        '''
+        Special subclass for making line graphs. The lineData
+        is a dictionary. 
+        
+        :param chartTitle: Title to print underneath the chart
+        :type chartTitle: String
+        :param yAxisTitle: x-Axis name
+        :type yAxisTitle: String
+        :param lineSeriesObjArray: array of DataSeries objects
+        :type lineSeriesObjArray: [DataSeries]
+        '''
+        super(Line, self).__init__()
+        
+        #******series = DataSeries(yAxisTitle, lineData.values())
+
+        if not isinstance(lineSeriesObjArray, list):
+            lineSeriesObjArray = [lineSeriesObjArray]
+
+        xAxis = Axis(axisDir='x', 
+                     labelArr = xAxisLabels
+                     )
+
+        yAxis = Axis(axisDir='y',
+                     titleText=yAxisTitle,
+                     dataSeriesArr=lineSeriesObjArray,
+                     argDict = {
+                                'plotLines': [{
+                                               'value': 0,
+                                               'width': 1,
+                                               'color': '#808080'
+                                               }]
+                                }
+                    )
+
+        legend = "legend: {" +\
+                    "layout: 'vertical'," +\
+                    "align: 'right'," +\
+                    "verticalAlign: 'middle'," +\
+                    "borderWidth: 0" +\
+                  "}"
+
+        # Start a chart function:  
+        self.createViz(chartTitle, {'type' : "'line'"})
+        self.add(str(xAxis) + ',')
+        self.add(str(yAxis) + ',')
+        self.add(legend + ',')
+        self.addAllSeries(lineSeriesObjArray)
+
+        
 # ---------------------------------------  Support Classes ----------------------------        
 class Axis(object):
     '''
     Container for information needed for x or y axes.
     '''
     
-    def __init__(self, axisDir='x', titleText=None, minimum=None, maximum=None, dataSeriesArr=None, labelArr=None):
+    def __init__(self, 
+                 axisDir='x', 
+                 titleText=None, 
+                 dataSeriesArr=None, 
+                 labelArr=None,
+                 argDict=None):
         '''
         Args are all keyword optionals. Which are required
         depends on the type of chart. For continuous quantities, minimum/maximum can be supplied, etc.
+
         :param axisDir: Whether an 'x' axis, or a 'y' axis
         :type axisDir: Char
         :param titleText: title of this axis; printed below or to the side, depending on axis dir.
         :type titleText: String
-        :param minimum: minimum value of the axis
-        :type minimum: {int | float}
-        :param maximum: maximum value of the axis
-        :type maximum: {int | float}
         :param dataSeriesArr: array of DataSeries objects to chart
         :type dataSeriesArr: [DataSeries]
         :param labelArr: axis labels
         :type labelArr: [String]
+        :param argDict: dictionary of additional arg/value pairs for the axis
+        :type argDict: {Any : Any} 
         '''
         self.axisDict = {}
         self.axisDir = axisDir
         if titleText is not None:
             self.axisDict['title'] = "{text: '%s'}" % titleText
-        if minimum is not None:
-            self.axisDict['min'] = minimum
-        if maximum is not None:
-            self.axisDict['max'] = maximum
         if labelArr is not None:
             self.axisDict['categories'] = str(labelArr) + '\n'
+        
+        # Merge the arbitrary-args dictionary with
+        # the other axis data:
+        if argDict is not None:
+            self.axisDict = dict(list(self.axisDict.items()) + list(argDict.items()))
 
     def __str__(self):
         '''
@@ -266,22 +374,59 @@ class Axis(object):
             res += 'yAxis: {\n'
             
         for key in self.axisDict.keys():
-            res += key + ': ' + self.axisDict[key] + ','
+            res += key + ': ' + str(self.axisDict[key]) + ','
         res = res[:-1] + '}'
         return res
 
+    
+class BasicDict(MutableMapping):
+    '''
+    A generic dictionary. Needed now because the
+    wonderfully practical DictMixin in going away
+    in Python 3. This is the new mixin.
+    '''
 
-class DataSeries(object):
+    def __init__(self, *args, **kwargs):
+        self.store = dict()
+        self.update(dict(*args, **kwargs))  # use the free update to set keys
+
+    def __getitem__(self, key):
+        return self.store[self.__keytransform__(key)]
+
+    def __setitem__(self, key, value):
+        self.store[self.__keytransform__(key)] = value
+
+    def __delitem__(self, key):
+        del self.store[self.__keytransform__(key)]
+
+    def __iter__(self):
+        return iter(self.store)
+
+    def __len__(self):
+        return len(self.store)
+
+    def __keytransform__(self, key):
+        return key
+
+class DataSeries(BasicDict):
     '''
     Holds one data series
     '''
     
     def __init__(self, seriesName, dataArr, seriesType=None):
-        self.seriesDict = {'name' : seriesName,
-                           'data' : dataArr
-                           }
+        super(DataSeries, self).__init__()
+        
+        self['name'] = seriesName
+        self['data'] = dataArr
+        
         if seriesType is not None:
-            self.seriesDict['type'] = seriesType
+            self['type'] = seriesType
+        
+    def name(self):
+        return self['name']
+    
+    def data(self):
+        return self['data']
         
     def __str__(self):
         '''
@@ -291,8 +436,8 @@ class DataSeries(object):
         :rtype: String
         '''
         res = ''
-        res += "{name: '%s',\n" % self.seriesDict['name']
-        res += "data: %s}" % str(self.seriesDict['data']) 
+        res += "{name: '%s',\n" % self['name']
+        res += "data: %s}" % str(self['data']) 
         return res
         
 class Tooltip(object):
