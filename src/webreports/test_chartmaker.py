@@ -8,11 +8,11 @@ import re
 from unittest import skipIf
 import unittest
 
-from chartmaker import ChartMaker, Histogram, Pie, Line, DataSeries
+from chartmaker import ChartMaker, Histogram, Pie, Line, Heatmap, DataSeries
 from htmlmin.minify import html_minify
 
 
-DO_ALL = True
+DO_ALL = False
 
 class TestChartMaker(unittest.TestCase):
     
@@ -84,7 +84,18 @@ class TestChartMaker(unittest.TestCase):
             groundTruth = fd.read()
         self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
 
-
+    #*********@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
+    def testHeatmap(self):
+        heatChart = Heatmap('Test Heatmap',
+                            ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'OCt', 'Nov', 'Dec'],
+                            'Time',
+                            'data/testHeatmapInput.csv'
+                            )
+        html = ChartMaker.makeWebPage(heatChart)
+        #print(html)
+        with open('/home/paepcke/tmp/trash7.html', 'w') as fd:
+            for line in html:
+                fd.write(line)
 
 
 

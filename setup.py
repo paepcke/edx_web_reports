@@ -8,7 +8,9 @@ setup(
     setup_requires   = [],
     install_requires = [#'pymysql_utils>=0.33',
 			#'configparser>=0.7.0',
-			'django-htmlmin>=0.3'
+			'django-htmlmin>=0.3',
+			'html5lib>=0.999',
+			'beautifulsoup4>=4.3.2',
 			],
     tests_require    = ['sentinels>=0.0.6', 'nose>=1.0'],
 

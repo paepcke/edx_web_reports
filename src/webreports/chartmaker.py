@@ -30,6 +30,7 @@ class ChartMaker(object):
     			  "     <title>OpenEdx Chart</title>\n" +\
 			      "\n" +\
     			  '     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
+                  '     <script type="text/javascript" src="../js/heatmapHighchartsPlugin.js"></script>' +\
     			  '     <script type="text/javascript">\n'
     # Beginning of a function def inside <head>.
     # The %s is used in in each instantiation
@@ -39,6 +40,8 @@ class ChartMaker(object):
     # the respective chart:
     CHART_FUNC_HEADER = " $(function () {\n" +\
                         "     $('#%s').highcharts({\n"
+
+    CHART_FUNC_HEADER_HEATMAP = "$('#%s').highcharts({\n"
 
     # Closing one chart function definition;
     # common to all definitions: 
@@ -52,14 +55,17 @@ class ChartMaker(object):
 				       "   </head>" +\
 				       "   <body>" +\
 				       '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
-				       '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR
+				       '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR +\
+                       '<script src="%s/../js/highcharts/modules/heatmap.js"></script>' % CURR_DIR +\
+                       '<script src="%s/../js/highcharts/modules/exporting.js"></script>'
 
     # A <div> in the <body> that contains a chart.
     # The %s is used to reference the chart object
     # that is to be included (i.e. a chart function definition
     # in <head> section):
     CHART_DIV   = '<div id="%s" style="min-width: 310px; height: 400px; margin: 0 auto"></div>'
-    
+    CHART_DIV_HEATMAP = '<div id="%s" style="height: 320px; width: 1000px; margin: 0 auto"></div>' +\
+                        '<pre id="csv" style="display: none">'
     
     HTML_END	=  "   </body></html>"
 
@@ -95,17 +101,36 @@ class ChartMaker(object):
 
         # Create one <div> section for each chart:
         for chartObj in chartObjArr:
-            html += ChartMaker.CHART_DIV % chartObj.getInternalName() 
+            if chartObj.chartType == 'heatmap':
+                # Add the data inline in a <pre>
+                html += ChartMaker.CHART_DIV_HEATMAP % chartObj.getInternalName()
+                # The [1:=1] snips the array brackets around the data:
+                html += '\n'.join(line for line in chartObj.heatmapData)
+                #****html += str(chartObj.heatmapData)[1:-1]
+                html += '\n</pre>\n'
+            else: 
+                html += ChartMaker.CHART_DIV % chartObj.getInternalName()
+        html += ChartMaker.HTML_END
 
         return html
 
-    def __init__(self):
+    def __init__(self, chartType=None):
         '''
         Init method of abstract superclass:
         '''
         self.internalChartName = 'chart%d' % ChartMaker.CHART_NAME_INDEX
         ChartMaker.CHART_NAME_INDEX += 1
-        self.thisChartFuncHeader = ChartMaker.CHART_FUNC_HEADER % self.internalChartName
+        if chartType is None:
+            self.thisChartFuncHeader = ChartMaker.CHART_FUNC_HEADER % self.internalChartName
+        elif chartType == 'heatmap':
+            # need a number of inline functions.
+            # Grab them from file:
+            with open('../js/heatmapHighchartsPlugin.js', 'r') as fd:
+                self.thisChartFuncHeader = ''.join(line for line in fd)
+            # Add the 
+            self.thisChartFuncHeader += ChartMaker.CHART_FUNC_HEADER_HEATMAP % self.internalChartName
+        else:
+            raise ValueError('Unknown chart type: %s' % str(chartType))  
         
         self.funcDef = self.thisChartFuncHeader
 
@@ -181,7 +206,7 @@ class ChartMaker(object):
         '''
         self.add('chart: ' + '{')
         for argKey in chartArgs.keys():
-            self.add(argKey + ': ' + chartArgs[argKey] + ',')
+            self.add(argKey + ": '%s'" % str(chartArgs[argKey]) + ',')
         self.backtrack()
         self.add('},')
         self.add("title: {text: '%s'},\n" % title)
@@ -212,6 +237,8 @@ class Histogram(ChartMaker):
         :type histogramDataSeries: DataSeries
         '''
         super(Histogram, self).__init__()
+        
+        self.chartType = 'histogram'
         
         xAxis = Axis(axisDir='x', 
                      titleText=xAxisTitle,
@@ -249,6 +276,7 @@ class Pie(ChartMaker):
         :type pieDataSeriesObjArr: [DataSeries]
         '''
         super(Pie, self).__init__()
+        self.chartType = 'pie'
 
         # Start the function string, taking
         # care of the 'chart' and 'title' entries:
@@ -290,6 +318,8 @@ class Pie(ChartMaker):
         self.add(']')  # close 'data: [': array of attr/value arrays 
         self.add("}]") # close 'series: [{'
 
+# ---------------------------------------  Chart Class Line ----------------------------        
+
 
 class Line(ChartMaker):
     
@@ -306,6 +336,7 @@ class Line(ChartMaker):
         :type lineSeriesObjArray: [DataSeries]
         '''
         super(Line, self).__init__()
+        self.chartType = 'line'
         
         if not isinstance(lineSeriesObjArray, list):
             lineSeriesObjArray = [lineSeriesObjArray]
@@ -340,6 +371,60 @@ class Line(ChartMaker):
         self.add(legend + ',')
         self.addAllSeries(lineSeriesObjArray)
 
+
+# ---------------------------------------  Chart Class Heatmap ----------------------------        
+
+class Heatmap(ChartMaker):
+    
+    def __init__(self, 
+                 chartTitle, 
+                 xAxisLabels,
+                 yAxisTitle, 
+                 xyzCSVFileOrArr):
+
+        super(Heatmap, self).__init__(chartType='heatmap')
+        self.chartType = 'heatmap'
+        
+        if not isinstance(xyzCSVFileOrArr, list):
+            with open(xyzCSVFileOrArr, 'r') as fd:
+                xyzCSVFileOrArr = [line.rstrip() for line in fd]
+        self.heatmapData = xyzCSVFileOrArr
+
+        self.createViz(chartTitle,
+                       {'type': 'heatmap',
+                        'margin': [60,10,80,50]
+                        })
+        xAxis = Axis(axisDir='x', 
+                     labelArr=xAxisLabels,
+                     argDict={'showLastLabel': 'false',
+                              'tickLength' : 16 
+                             }
+                     )
+        yAxis = Axis(axisDir='y')
+
+
+
+        self.add(str(xAxis) + ',')
+        self.add(str(yAxis) + ',')
+        self.add('colorAxis: {' +\
+                         "stops: [ " +\
+		                 "[0, '#3060cf']," +\
+		                 "[0.5, '#fffbbc']," +\
+		                 "[0.9, '#c4463a']," +\
+		                 "[1, '#c4463a']," +\
+		                 "]},"
+                )
+        self.add("series: [{" +\
+                 "borderWidth: 0,"  +\
+                 "nullColor: '#EFEFEF'," +\
+                 "colsize: 24 * 36e5, // one day," +\
+                 "tooltip: {" +\
+                    "headerFormat: 'Temperature<br/>'," +\
+                     "pointFormat: '{point.x:%e %b, %Y} {point.y}:00: <b>{point.value} </b>'" +\
+                    "}" +\
+                 "}]"
+                 )
+        
         
 # ---------------------------------------  Support Classes ----------------------------        
 class Axis(object):
