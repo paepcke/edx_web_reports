@@ -4,12 +4,14 @@ Created on May 8, 2014
 @author: paepcke
 '''
 from collections import OrderedDict
+import datetime
 import re
 from unittest import skipIf
 import unittest
 
-from chartmaker import ChartMaker, Histogram, Pie, Line, Heatmap, DataSeries
 from htmlmin.minify import html_minify
+
+from chartmaker import ChartMaker, Histogram, Pie, Line, Heatmap, DataSeries
 
 
 DO_ALL = False
@@ -79,21 +81,25 @@ class TestChartMaker(unittest.TestCase):
         #print(html)
         htmlNoCR = re.sub('\n','',html)
         htmlMinimized = html_minify(htmlNoCR)
-        #print(htmlMinimized)
+        print(htmlMinimized)
         with open('data/testLineGroundTruth.txt', 'r') as fd:
             groundTruth = fd.read()
         self.assertEqual(self.removeLocalPart(groundTruth.strip()), self.removeLocalPart(htmlMinimized.strip()))
 
-    #*********@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
+    #******@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
     def testHeatmap(self):
         heatChart = Heatmap('Test Heatmap',
                             ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'OCt', 'Nov', 'Dec'],
                             'Time',
-                            'data/testHeatmapInput.csv'
+                            'data/testHeatmapInput.csv',
+                            rowsToSkip=1,
+                            xToComparableFunc=datetime.datetime,
+                            yToComparableFunc=float,
+                            zToComparableFunc=float
                             )
         html = ChartMaker.makeWebPage(heatChart)
         #print(html)
-        with open('/home/paepcke/tmp/trash7.html', 'w') as fd:
+        with open('/home/paepcke/tmp/trash8.html', 'w') as fd:
             for line in html:
                 fd.write(line)
 

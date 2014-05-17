@@ -11,6 +11,7 @@ setup(
 			'django-htmlmin>=0.3',
 			'html5lib>=0.999',
 			'beautifulsoup4>=4.3.2',
+			'htmlmin>=0.1.5',
 			],
     tests_require    = ['sentinels>=0.0.6', 'nose>=1.0'],
 

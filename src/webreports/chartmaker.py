@@ -25,13 +25,13 @@ class ChartMaker(object):
     # Includes start of <head>, up to 
     # just before the function def(s):
     HTML_HEADER = "<!DOCTYPE HTML>\n" +\
-    			  " <head>\n" +\
-    			  '     <meta http-equiv="Content-Type" content="text/HTML; charset=utf-8">\n' +\
-    			  "     <title>OpenEdx Chart</title>\n" +\
-			      "\n" +\
-    			  '     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
+                  " <head>\n" +\
+                  '     <meta http-equiv="Content-Type" content="text/HTML; charset=utf-8">\n' +\
+                  "     <title>OpenEdx Chart</title>\n" +\
+                  "\n" +\
+                  '     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
                   '     <script type="text/javascript" src="../js/heatmapHighchartsPlugin.js"></script>' +\
-    			  '     <script type="text/javascript">\n'
+                  '     <script type="text/javascript">\n'
     # Beginning of a function def inside <head>.
     # The %s is used in in each instantiation
     # of a chart making subclass to provide a name
@@ -52,10 +52,10 @@ class ChartMaker(object):
     # functions in <head> section, plus 
     # ref to required Highchart files: 
     HTML_END_FUNC_DEFS = "      </script>" +\
-				       "   </head>" +\
-				       "   <body>" +\
-				       '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
-				       '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR +\
+                       "   </head>" +\
+                       "   <body>" +\
+                       '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
+                       '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR +\
                        '<script src="%s/../js/highcharts/modules/heatmap.js"></script>' % CURR_DIR +\
                        '<script src="%s/../js/highcharts/modules/exporting.js"></script>'
 
@@ -67,7 +67,7 @@ class ChartMaker(object):
     CHART_DIV_HEATMAP = '<div id="%s" style="height: 320px; width: 1000px; margin: 0 auto"></div>' +\
                         '<pre id="csv" style="display: none">'
     
-    HTML_END	=  "   </body></html>"
+    HTML_END    =  "   </body></html>"
 
     CHART_NAME_INDEX = 0
 
@@ -160,6 +160,23 @@ class ChartMaker(object):
         '''
         self.funcDef += javascriptStr
 
+    def addDictItem(self, dictKey, **dictKwdVals):
+        if dictKey is None:
+            self.add('{')
+        else:
+            self.add(dictKey + ':' + '{')
+        for key,val in dictKwdVals.iteritems():
+            self.add(key + ':' + str(val) + ',')
+        self.backtrack()
+        self.add('},')
+        
+    def makeDictStr(self, **dictKwdVals):
+        res = '{'
+        for key,val in dictKwdVals.iteritems():
+            res += key + ':' + str(val) + ','
+        return res[:-1] + '}'
+        
+    
     def backtrack(self, numChars=1):
         '''
         Remove numChars characters from the function
@@ -187,29 +204,60 @@ class ChartMaker(object):
         self.backtrack()
         self.add(']')
         
-    def createViz(self, title, chartArgs):
+    def createViz(self, **dictValKwds):
         '''
         Start of data structure for all Highchart functions.
 
-        :param title: title of entire chart. Will be printed above the chart
-        :type title: String
-        :param chartArgs: dict with attribute value pairs. Ex::
-                {'type' : 'column'}
+        :param dictValKwds: attr/value pairs. Ex::
+                type='column'
             for column charts, or:: 
-                {
-                plotBackgroundColor: null,
-                plotBorderWidth: null,
-                plotShadow: false
+                plotBackgroundColor='null',
+                plotBorderWidth='null',
+                plotShadow='false'
                 }
             for pie charts.
-        :type chartArg: {String : String}
+        :type dictValKwd: kwd=<any>
         '''
-        self.add('chart: ' + '{')
-        for argKey in chartArgs.keys():
-            self.add(argKey + ": '%s'" % str(chartArgs[argKey]) + ',')
-        self.backtrack()
-        self.add('},')
-        self.add("title: {text: '%s'},\n" % title)
+        self.addDictItem('chart', **dictValKwds)
+
+    def findMinMaxYZ(self, 
+                     xyzArr, 
+                     fieldSep=',',
+                     xToComparableFunc=None,
+                     yToComparableFunc=None,
+                     zToComparableFunc=None,
+                     rowsToSkip=0                   
+                     ):
+        xmin = 0
+        xmax = 0
+        ymin = 0
+        ymax = 0
+        zmin = 0
+        zmax = 0
+        try:
+            for lineNum, line in enumerate(xyzArr[rowsToSkip:]):
+                (x,y,z) = line.split(fieldSep)  # @UnusedVariable
+                if xToComparableFunc is not None:
+                    x = xToComparableFunc(x)
+                if yToComparableFunc is not None:
+                    y = yToComparableFunc(y)
+                if zToComparableFunc is not None:
+                    z = zToComparableFunc(z)
+                xmin = min(xmin, x)
+                xmax = min(xmax, x)
+                ymin = min(ymin, y)
+                ymax = max(ymax, y)
+                zmin = min(zmin, z)
+                zmax = max(zmax, z)
+        except (ValueError,TypeError) as e:
+            # The '+rowsToSkip' is required to
+            # match the offending line properly:
+            # enumerate starts the count at 0, even
+            # if rowsToSkip > 0:
+            raise ValueError('Data contains non-float/int in line %d (%s): %s' % (lineNum+rowsToSkip,line, `e`))
+        return (xmin, xmax, ymin, ymax, zmin, zmax)
+            
+
 
 # ---------------------------------------  Chart Class Histogram ----------------------------        
         
@@ -252,7 +300,8 @@ class Histogram(ChartMaker):
                      )
                      
         # Start a chart function:  
-        self.createViz(chartTitle, {'type' : "'column'"})
+        self.createViz({'title': {'text': '%s' % chartTitle},
+                        'type' : "'column'"})
         self.add(str(xAxis) + ',')
         self.add(str(yAxis) + ',')
         self.add("legend: {enabled : false},")
@@ -280,7 +329,8 @@ class Pie(ChartMaker):
 
         # Start the function string, taking
         # care of the 'chart' and 'title' entries:
-        self.createViz(chartTitle, {'plotBackgroundColor' : 'null',
+        self.createViz(chartTitle, {'title' : {'text': '%s' % chartTitle}, 
+                                    'plotBackgroundColor' : 'null',
                                     'plotBorderWidth' : 'null',
                                     'plotShadow' : 'false'
                                     })
@@ -365,7 +415,8 @@ class Line(ChartMaker):
                   "}"
 
         # Start a chart function:  
-        self.createViz(chartTitle, {'type' : "'line'"})
+        self.createViz({'title': "{text: '%s'}," % chartTitle,  
+                        'type' : "'line'"})
         self.add(str(xAxis) + ',')
         self.add(str(yAxis) + ',')
         self.add(legend + ',')
@@ -380,7 +431,12 @@ class Heatmap(ChartMaker):
                  chartTitle, 
                  xAxisLabels,
                  yAxisTitle, 
-                 xyzCSVFileOrArr):
+                 xyzCSVFileOrArr,
+                 fieldSep=',',
+                 rowsToSkip=0,
+                 xToComparableFunc=float,
+                 yToComparableFunc=float,
+                 zToComparableFunc=float,):
 
         super(Heatmap, self).__init__(chartType='heatmap')
         self.chartType = 'heatmap'
@@ -389,15 +445,42 @@ class Heatmap(ChartMaker):
             with open(xyzCSVFileOrArr, 'r') as fd:
                 xyzCSVFileOrArr = [line.rstrip() for line in fd]
         self.heatmapData = xyzCSVFileOrArr
+        (xmin, xmax, ymin, ymax, zmin, zmax) = self.findMinMaxYZ(self.heatmapData, 
+                                                         fieldSep=fieldSep,
+                                                         rowsToSkip=rowsToSkip,
+                                                         xToComparableFunc=xToComparableFunc,
+                                                         yToComparableFunc=yToComparableFunc,
+                                                         zToComparableFunc=zToComparableFunc
+                                                         )
 
-        self.createViz(chartTitle,
-                       {'type': 'heatmap',
-                        'margin': [60,10,80,50]
-                        })
+        self.createViz(type="'heatmap'",
+                       margin=[60,10,80,50])
+        
+        self.addDictItem('data', csv="document.getElementById('csv').innerHTML")
+        
+        self.addDictItem('title', 
+                         text="'Highcharts extended heat map.'",
+                         align="'left'",
+                         x=40
+                         )
+        
+        self.addDictItem('tooltip',
+            backgroundColor='null',
+            borderWidth=0,
+            distance=10,
+            shadow='false',
+            useHTML='true',
+            style=self.makeDictStr(padding=0, color="'black'")
+            )
+        
         xAxis = Axis(axisDir='x', 
-                     labelArr=xAxisLabels,
                      argDict={'showLastLabel': 'false',
-                              'tickLength' : 16 
+                              'tickLength' : 16,
+                              'labels' : self.makeDictStr(align="'left'",
+                                                          x=5,
+                                                          format="'{value:%B}'"),
+                              'min' : xmin,
+                              'max' : xmax
                              }
                      )
         yAxis = Axis(axisDir='y')
@@ -408,11 +491,11 @@ class Heatmap(ChartMaker):
         self.add(str(yAxis) + ',')
         self.add('colorAxis: {' +\
                          "stops: [ " +\
-		                 "[0, '#3060cf']," +\
-		                 "[0.5, '#fffbbc']," +\
-		                 "[0.9, '#c4463a']," +\
-		                 "[1, '#c4463a']," +\
-		                 "]},"
+                         "[0, '#3060cf']," +\
+                         "[0.5, '#fffbbc']," +\
+                         "[0.9, '#c4463a']," +\
+                         "[1, '#c4463a']," +\
+                         "]},"
                 )
         self.add("series: [{" +\
                  "borderWidth: 0,"  +\
