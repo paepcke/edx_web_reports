@@ -93,13 +93,13 @@ class TestChartMaker(unittest.TestCase):
                             'Time',
                             'data/testHeatmapInput.csv',
                             rowsToSkip=1,
-                            xToComparableFunc=datetime.datetime,
+                            xToComparableFunc=ChartMaker.makeDatetimeFromString,
                             yToComparableFunc=float,
                             zToComparableFunc=float
                             )
         html = ChartMaker.makeWebPage(heatChart)
         #print(html)
-        with open('/home/paepcke/tmp/trash8.html', 'w') as fd:
+        with open('/home/paepcke/tmp/trash9.html', 'w') as fd:
             for line in html:
                 fd.write(line)
 

@@ -3,8 +3,14 @@ Created on May 8, 2014
 
 @author: paepcke
 '''
-import os
+from __future__ import print_function
+
 from collections import MutableMapping
+import datetime
+import os
+import sys
+
+import dateutil.parser
 
 
 class ChartTypes:
@@ -30,7 +36,6 @@ class ChartMaker(object):
                   "     <title>OpenEdx Chart</title>\n" +\
                   "\n" +\
                   '     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>\n' +\
-                  '     <script type="text/javascript" src="../js/heatmapHighchartsPlugin.js"></script>' +\
                   '     <script type="text/javascript">\n'
     # Beginning of a function def inside <head>.
     # The %s is used in in each instantiation
@@ -55,6 +60,7 @@ class ChartMaker(object):
                        "   </head>" +\
                        "   <body>" +\
                        '<script src="%s/../js/highcharts/highcharts.js"></script>' % CURR_DIR +\
+                       '<script src="%s/../js/highcharts/modules/data.js"></script>' % CURR_DIR +\
                        '<script src="%s/../js/highcharts/modules/exporting.js"></script>' % CURR_DIR +\
                        '<script src="%s/../js/highcharts/modules/heatmap.js"></script>' % CURR_DIR +\
                        '<script src="%s/../js/highcharts/modules/exporting.js"></script>'
@@ -228,36 +234,131 @@ class ChartMaker(object):
                      zToComparableFunc=None,
                      rowsToSkip=0                   
                      ):
-        xmin = 0
-        xmax = 0
-        ymin = 0
-        ymax = 0
-        zmin = 0
-        zmax = 0
+        '''
+        Given an array of 3D data. Each three-element row can either be
+        a Python three-tuple, or a string, with fields separated
+        by fieldSep. The method return a six-tuple: the minimum and maximum
+        value in each dimension.
+        
+        The parameters xToComparableFunc, yToComparableFunc, and
+        zToComparableFunc must be functions that, when appied to
+        the respective dimension data returns a new value that is
+        comparable. Comparable means that, for instance, max(val1,val2)
+        will not break. 
+        
+        :param xyzArr: array of three-tuples. Each tuple element must be,
+                       or must be convertible to a value that is comparable.
+        :type xyzArr: {[<any>,<any>,<any>] | (<any>,<any>,<any>)}
+        :param fieldSep: separator of elements in the tuple.
+        :type fieldSep: if xyzArr consists of strings, this parameter is the field separator.
+                        If the array elements are tuples, this parameter is ignored. 
+        :param xToComparableFunc: String
+        :type xToComparableFunc: function to convert x-Data to a comparable value
+        :param yToComparableFunc: {<function> | None}
+        :type yToComparableFunc: function to convert y-Data to a comparable value
+        :param zToComparableFunc: {<function> | None}
+        :type zToComparableFunc: function to convert z-Data to a comparable value
+        :param rowsToSkip: number of elements in array to skip. Useful to skip header info.
+        :type rowsToSkip: int
+        '''
         try:
-            for lineNum, line in enumerate(xyzArr[rowsToSkip:]):
-                (x,y,z) = line.split(fieldSep)  # @UnusedVariable
-                if xToComparableFunc is not None:
-                    x = xToComparableFunc(x)
-                if yToComparableFunc is not None:
-                    y = yToComparableFunc(y)
-                if zToComparableFunc is not None:
-                    z = zToComparableFunc(z)
-                xmin = min(xmin, x)
-                xmax = min(xmax, x)
-                ymin = min(ymin, y)
-                ymax = max(ymax, y)
-                zmin = min(zmin, z)
-                zmax = max(zmax, z)
-        except (ValueError,TypeError) as e:
-            # The '+rowsToSkip' is required to
-            # match the offending line properly:
-            # enumerate starts the count at 0, even
-            # if rowsToSkip > 0:
-            raise ValueError('Data contains non-float/int in line %d (%s): %s' % (lineNum+rowsToSkip,line, `e`))
-        return (xmin, xmax, ymin, ymax, zmin, zmax)
+            if len(xyzArr) <= rowsToSkip:
+                raise ValueError('Insufficient number of values in data array.')
+    
+            # If functions that convert from element to comparable
+            # are None, specify them as the identity function:
+            if xToComparableFunc is None:
+                xToComparableFunc = lambda x: x
+            if yToComparableFunc is None:
+                yToComparableFunc =  lambda x: x
+            if zToComparableFunc is None:
+                zToComparableFunc =  lambda x: x
+            # Initialize min/max values:
+            firstArrEl = xyzArr[rowsToSkip]
+            if type(firstArrEl) == tuple:
+                (x,y,z) = firstArrEl
+            else:
+                (x,y,z) = firstArrEl.split(fieldSep)
             
+            xmin = xToComparableFunc(x)
+            xmax = xmin
+            ymin = yToComparableFunc(y)
+            ymax = ymin
+            zmin = zToComparableFunc(z)
+            zmax = zmin
+            # If array only had one non-header element: done
+            if len(xyzArr) == rowsToSkip+1:
+                return (xmin, xmax, ymin, ymax, zmin, zmax)
+    
+                for arrIndex, arrElement in enumerate(xyzArr[rowsToSkip+1:]):
+                    try:
+                        if type(arrElement) == tuple:
+                            (x,y,z) = arrElement
+                        else:
+                            (x,y,z) = arrElement.split(fieldSep)
+                        x = xToComparableFunc(x)
+                        y = yToComparableFunc(y)
+                        z = zToComparableFunc(z)
+                        xmin = min(xmin, x)
+                        xmax = min(xmax, x)
+                        ymin = min(ymin, y)
+                        ymax = max(ymax, y)
+                        zmin = min(zmin, z)
+                        zmax = max(zmax, z)
+                    except (ValueError,TypeError):
+                        # The '+rowsToSkip' is required to
+                        # match the offending arrElement properly:
+                        # enumerate starts the count at 0, even
+                        # if rowsToSkip > 0:
+                        self.warning('Data contains non-float/int in arrElement %d (%s)' % (arrIndex+rowsToSkip,arrElement))
+                        continue
+        finally:
+            return (self.pythonToJavaScriptType(xmin), 
+                    self.pythonToJavaScriptType(xmax), 
+                    self.pythonToJavaScriptType(ymin), 
+                    self.pythonToJavaScriptType(ymax), 
+                    self.pythonToJavaScriptType(zmin),
+                    self.pythonToJavaScriptType(zmax)
+                    )
 
+    def warning(self, *objsToPrint):
+        print("WARNING: ", *objsToPrint, file=sys.stderr)
+         
+    def pythonToJavaScriptType(self, quantity):
+        '''
+        Given any Python quantity, return either the
+        same quantity, if the quantity is the same in 
+        JavaScript, or a JavaScript string that will 
+        produce the equivalent quantity in JS. NOTE:
+        this method only handles what's needed for 
+        the purpose of this file! 
+        :param quantity: Python item to be converted to JavaScript equivalent
+        :type quantity: <any>
+        '''
+        if type(quantity) == datetime.datetime:
+            return 'new Date(%s).UTC' % quantity.isoformat()
+        try:
+            aDate = self.makeDatetimeFromString(quantity)
+            return 'new Date(%s).UTC' % aDate.isoformat()
+        except:
+            # It's not a date; just return unchanged:
+            return quantity
+            
+    @classmethod
+    def makeDatetimeFromString(cls, dateTimeStr):
+        '''
+        Given an at least reasonable string of date,
+        or date and time, return a datetime object.
+        Examples of acceptable strings: '2013-01-01',
+        '2010-05-08T23:41:54.000Z', and '23:41:54.000Z'.
+        The latter uses current calendar date for the 
+        date. For details, see PyPi's datedutil.
+        :param dateTimeStr: acceptable date, time, or date-and-time string
+        :type dateTimeStr: String
+        :return corresponding Datetime object.
+        :rtype Datetime
+        '''
+        return dateutil.parser.parse(dateTimeStr)
 
 # ---------------------------------------  Chart Class Histogram ----------------------------        
         
@@ -483,8 +584,20 @@ class Heatmap(ChartMaker):
                               'max' : xmax
                              }
                      )
-        yAxis = Axis(axisDir='y')
-
+        yAxis = Axis(axisDir='y',
+        			 argDict = {'title' : self.makeDictStr(text='null'),
+                                'labels': self.makeDictStr(format='{value}:00'),
+                                'minPadding'  : 0,
+                                'maxPadding'  : 0,
+                                'startOnTick' : 'false',
+                                'endOnTick'   : 'false',
+                                'tickposition': [0, 6, 12, 18, 24],
+                                'min'         : ymin,
+                                'max'         : ymax,
+                                'reversed'    : 'true'
+                               }
+        			     
+        			 ),
 
 
         self.add(str(xAxis) + ',')
@@ -495,8 +608,15 @@ class Heatmap(ChartMaker):
                          "[0.5, '#fffbbc']," +\
                          "[0.9, '#c4463a']," +\
                          "[1, '#c4463a']," +\
-                         "]},"
-                )
+                         "]}," +\
+                         "min: -15,"
+                         "max: 25," +\
+                         "startOnTick: false," +\
+                         "endOnTick: false," +\
+                         "labels: {format: '{value}'}" +\
+                         "}"
+                         )
+
         self.add("series: [{" +\
                  "borderWidth: 0,"  +\
                  "nullColor: '#EFEFEF'," +\
