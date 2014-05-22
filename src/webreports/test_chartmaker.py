@@ -88,20 +88,25 @@ class TestChartMaker(unittest.TestCase):
 
     #******@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
     def testHeatmap(self):
-        heatChart = Heatmap('Test Heatmap',
-                            ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'OCt', 'Nov', 'Dec'],
-                            'Time',
-                            'data/testHeatmapInput.csv',
+        heatChart = Heatmap('data/testHeatmapInput.csv',
+                            chartTitle='Test Heatmap',
+                            chartSubtitle='Test subtitle',
+                            xAxisLabels=['Jany', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'OCt', 'Nov', 'Dec'],
+                            xAxisLabelSuffix="\\'14",
+                            yLabelSuffix=':00',
+                            colorAxisSuffix='C',
                             rowsToSkip=1,
-                            xToComparableFunc=ChartMaker.makeDatetimeFromString,
-                            yToComparableFunc=float,
-                            zToComparableFunc=float
                             )
         html = ChartMaker.makeWebPage(heatChart)
         #print(html)
         with open('/home/paepcke/tmp/trash9.html', 'w') as fd:
             for line in html:
                 fd.write(line)
+        
+#         with open('data/testHeatmapGroundTruth.html', 'w') as fd:
+#             for line in html:
+#                 fd.write(line)
+        #self.assertEqualToFile('data/testHeatmapGroundTruth.html', html)
 
 
 
@@ -120,6 +125,15 @@ class TestChartMaker(unittest.TestCase):
         :rtype: String
         '''
         return re.sub(TestChartMaker.REMOVE_SRC_PATTERN, '', aString)
+
+    def assertEqualToFile(self, expectedFileName, actualStr, msg=None):
+        with open(expectedFileName, 'r') as fd:
+            expected = fd.read()
+            
+        self.assertEquals(expected, actualStr, msg)
+        
+        
+        
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

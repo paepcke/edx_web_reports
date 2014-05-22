@@ -27,6 +27,13 @@ class ChartMaker(object):
     An abstract superclass of all
     chart classes
     '''
+    # Chart options applicable to all charts; only values different
+    # from the defaults are here:
+
+    TICKWITH=2      # px width of main tickmarks
+    TICKLENGTH = 10
+    
+    
     # Opening of complete HTML document
     # Includes start of <head>, up to 
     # just before the function def(s):
@@ -265,20 +272,24 @@ class ChartMaker(object):
             if len(xyzArr) <= rowsToSkip:
                 raise ValueError('Insufficient number of values in data array.')
     
-            # If functions that convert from element to comparable
-            # are None, specify them as the identity function:
-            if xToComparableFunc is None:
-                xToComparableFunc = lambda x: x
-            if yToComparableFunc is None:
-                yToComparableFunc =  lambda x: x
-            if zToComparableFunc is None:
-                zToComparableFunc =  lambda x: x
             # Initialize min/max values:
             firstArrEl = xyzArr[rowsToSkip]
+
             if type(firstArrEl) == tuple:
                 (x,y,z) = firstArrEl
             else:
                 (x,y,z) = firstArrEl.split(fieldSep)
+            
+            # Get functions that, when applied to values
+            # in col x, y, and z, respectively, yield 
+            # equivalent values for which MAX, MIN, and
+            # relational ops work. Only strings that 
+            # represent dates and times are currently 
+            # treated specially here:
+             
+            xToComparableFunc = self.valueToComparable(x)
+            yToComparableFunc = self.valueToComparable(y)
+            zToComparableFunc = self.valueToComparable(z)
             
             xmin = xToComparableFunc(x)
             xmax = xmin
@@ -286,33 +297,37 @@ class ChartMaker(object):
             ymax = ymin
             zmin = zToComparableFunc(z)
             zmax = zmin
+            numMissingValues = 0
             # If array only had one non-header element: done
             if len(xyzArr) == rowsToSkip+1:
                 return (xmin, xmax, ymin, ymax, zmin, zmax)
     
-                for arrIndex, arrElement in enumerate(xyzArr[rowsToSkip+1:]):
-                    try:
-                        if type(arrElement) == tuple:
-                            (x,y,z) = arrElement
-                        else:
-                            (x,y,z) = arrElement.split(fieldSep)
-                        x = xToComparableFunc(x)
-                        y = yToComparableFunc(y)
-                        z = zToComparableFunc(z)
-                        xmin = min(xmin, x)
-                        xmax = min(xmax, x)
-                        ymin = min(ymin, y)
-                        ymax = max(ymax, y)
-                        zmin = min(zmin, z)
-                        zmax = max(zmax, z)
-                    except (ValueError,TypeError):
-                        # The '+rowsToSkip' is required to
-                        # match the offending arrElement properly:
-                        # enumerate starts the count at 0, even
-                        # if rowsToSkip > 0:
-                        self.warning('Data contains non-float/int in arrElement %d (%s)' % (arrIndex+rowsToSkip,arrElement))
-                        continue
+            for arrElement in xyzArr[rowsToSkip+1:]:
+                try:
+                    if type(arrElement) == tuple:
+                        (x,y,z) = arrElement
+                    else:
+                        (x,y,z) = arrElement.split(fieldSep)
+                    x = xToComparableFunc(x)
+                    y = yToComparableFunc(y)
+                    z = zToComparableFunc(z)
+                    xmin = min(xmin, x)
+                    xmax = max(xmax, x)
+                    ymin = min(ymin, y)
+                    ymax = max(ymax, y)
+                    zmin = min(zmin, z)
+                    zmax = max(zmax, z)
+                except (ValueError,TypeError):
+                    # The '+rowsToSkip' is required to
+                    # match the offending arrElement properly:
+                    # enumerate starts the count at 0, even
+                    # if rowsToSkip > 0:
+                    numMissingValues += 1
+                    #self.warning('Data contains non-float/int in arrElement %d (%s)' % (arrIndex+rowsToSkip,arrElement))
+                    continue
         finally:
+            if numMissingValues > 0:
+                self.warning('Data contains %d empty, or otherwise non-float/int x,y, or z values' % numMissingValues)
             return (self.pythonToJavaScriptType(xmin), 
                     self.pythonToJavaScriptType(xmax), 
                     self.pythonToJavaScriptType(ymin), 
@@ -324,6 +339,40 @@ class ChartMaker(object):
     def warning(self, *objsToPrint):
         print("WARNING: ", *objsToPrint, file=sys.stderr)
          
+
+    def valueToComparable(self, value):
+        '''
+        Given a value, returns a function that,
+        when applied to the value, turns it into
+        an equivalent value that is comparable.
+        Currently, only strings that can be parsed
+        into dates and/or times are recognized.
+        Others return an identity function. 
+        Ex1.: '2014-01-09' returns function datetime.datetime.
+              The caller can call this method twice,
+              with two different data strings, apply 
+              the returned function to both, and
+              have two values that can be compared
+              via greater-than, etc.
+        Ex2: 10.0 will return an identity function, which
+              when applied to 10.0 will yield 10.0. That's
+              because 10.0 is already a comparable value.
+        
+        NOTE: Will not work with instances of arbitrary classes.      
+              
+        :param value: the value whose conversion function is to be returned
+        :type value: <any>
+        '''
+        identity = lambda x: x
+        # A string that can be interpreted as a date?
+        try:
+            datetime.datetime(value)
+            return ChartMaker.makeDatetimeFromString
+        except:
+            # not a date or time in string form
+            pass
+        return identity
+    
     def pythonToJavaScriptType(self, quantity):
         '''
         Given any Python quantity, return either the
@@ -336,10 +385,10 @@ class ChartMaker(object):
         :type quantity: <any>
         '''
         if type(quantity) == datetime.datetime:
-            return 'new Date(%s).UTC' % quantity.isoformat()
+            return "new Date('%s').UTC" % quantity.isoformat()
         try:
             aDate = self.makeDatetimeFromString(quantity)
-            return 'new Date(%s).UTC' % aDate.isoformat()
+            return "new Date('%s').UTC" % aDate.isoformat()
         except:
             # It's not a date; just return unchanged:
             return quantity
@@ -528,11 +577,18 @@ class Line(ChartMaker):
 
 class Heatmap(ChartMaker):
     
-    def __init__(self, 
-                 chartTitle, 
-                 xAxisLabels,
-                 yAxisTitle, 
+    def __init__(self,
                  xyzCSVFileOrArr,
+                 chartTitle='',
+                 chartSubtitle='',
+                 xAxisTitle='',
+                 xAxisLabels=[],
+                 xAxisLabelSuffix=[],
+                 yAxisTitle=[],
+                 yAxisLabels=[],
+                 yLabelSuffix='', 
+                 yAxisLabelSuffix=[],
+                 colorAxisSuffix='', 
                  fieldSep=',',
                  rowsToSkip=0,
                  xToComparableFunc=float,
@@ -546,7 +602,7 @@ class Heatmap(ChartMaker):
             with open(xyzCSVFileOrArr, 'r') as fd:
                 xyzCSVFileOrArr = [line.rstrip() for line in fd]
         self.heatmapData = xyzCSVFileOrArr
-        (xmin, xmax, ymin, ymax, zmin, zmax) = self.findMinMaxYZ(self.heatmapData, 
+        (xmin, xmax, ymin, ymax, zmin, zmax) = self.findMinMaxYZ(self.heatmapData,  # @UnusedVariable
                                                          fieldSep=fieldSep,
                                                          rowsToSkip=rowsToSkip,
                                                          xToComparableFunc=xToComparableFunc,
@@ -559,11 +615,20 @@ class Heatmap(ChartMaker):
         
         self.addDictItem('data', csv="document.getElementById('csv').innerHTML")
         
-        self.addDictItem('title', 
-                         text="'Highcharts extended heat map.'",
-                         align="'left'",
-                         x=40
-                         )
+        if len(chartTitle) > 0:
+            self.addDictItem('title', 
+                             text="'%s'" % chartTitle,
+                             align="'left'",
+                             x=40
+                             )
+            
+        if len(chartSubtitle) > 0:
+            self.addDictItem('subtitle', 
+                             text="'%s'" % chartSubtitle,
+                             align="'left'",
+                             x=40
+                             )
+            
         
         self.addDictItem('tooltip',
             backgroundColor='null',
@@ -576,17 +641,20 @@ class Heatmap(ChartMaker):
         
         xAxis = Axis(axisDir='x', 
                      argDict={'showLastLabel': 'false',
-                              'tickLength' : 16,
-                              'labels' : self.makeDictStr(align="'left'",
-                                                          x=5,
-                                                          format="'{value:%B}'"),
+                              'tickLength' : ChartMaker.TICKLENGTH,
+                              'tickWidth'  : ChartMaker.TICKWITH,
+#                               'labels' : self.makeDictStr(align="'left'",
+#                                                           x=5,
+#                                                           format="'{value}'" if len(xAxisLabelSuffix) == 0 else "'{value}%s'" % xAxisLabelSuffix
+#                                                           ),  
+                                                          
                               'min' : xmin,
                               'max' : xmax
                              }
                      )
         yAxis = Axis(axisDir='y',
-        			 argDict = {'title' : self.makeDictStr(text='null'),
-                                'labels': self.makeDictStr(format='{value}:00'),
+        			 argDict = {'title' : self.makeDictStr(text='null' if len(yAxisTitle) == 0 else "'%s'" % yAxisTitle),
+                                'labels': self.makeDictStr(format="'{value}%s'" % yLabelSuffix),
                                 'minPadding'  : 0,
                                 'maxPadding'  : 0,
                                 'startOnTick' : 'false',
@@ -597,7 +665,7 @@ class Heatmap(ChartMaker):
                                 'reversed'    : 'true'
                                }
         			     
-        			 ),
+        			 )
 
 
         self.add(str(xAxis) + ',')
@@ -608,19 +676,19 @@ class Heatmap(ChartMaker):
                          "[0.5, '#fffbbc']," +\
                          "[0.9, '#c4463a']," +\
                          "[1, '#c4463a']," +\
-                         "]}," +\
+                         "]," +\
                          "min: -15,"
                          "max: 25," +\
                          "startOnTick: false," +\
                          "endOnTick: false," +\
-                         "labels: {format: '{value}'}" +\
-                         "}"
+                         "labels: {format: '{value}%s'}" % colorAxisSuffix +\
+                         "},"
                          )
 
         self.add("series: [{" +\
                  "borderWidth: 0,"  +\
                  "nullColor: '#EFEFEF'," +\
-                 "colsize: 24 * 36e5, // one day," +\
+                 "colsize: 24 * 36e5," +\
                  "tooltip: {" +\
                     "headerFormat: 'Temperature<br/>'," +\
                      "pointFormat: '{point.x:%e %b, %Y} {point.y}:00: <b>{point.value} </b>'" +\
