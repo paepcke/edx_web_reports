@@ -582,13 +582,11 @@ class Heatmap(ChartMaker):
                  chartTitle='',
                  chartSubtitle='',
                  xAxisTitle='',
-                 xAxisLabels=[],
-                 xAxisLabelSuffix=[],
-                 yAxisTitle=[],
-                 yAxisLabels=[],
+                 xAxisLabelSuffix='',
+                 yAxisTitle='',
                  yLabelSuffix='', 
-                 yAxisLabelSuffix=[],
-                 colorAxisSuffix='', 
+                 yAxisLabelSuffix='',
+                 colorAxisLabelSuffix='', 
                  fieldSep=',',
                  rowsToSkip=0,
                  xToComparableFunc=float,
@@ -643,11 +641,11 @@ class Heatmap(ChartMaker):
                      argDict={'showLastLabel': 'false',
                               'tickLength' : ChartMaker.TICKLENGTH,
                               'tickWidth'  : ChartMaker.TICKWITH,
-#                               'labels' : self.makeDictStr(align="'left'",
-#                                                           x=5,
-#                                                           format="'{value}'" if len(xAxisLabelSuffix) == 0 else "'{value}%s'" % xAxisLabelSuffix
-#                                                           ),  
-                                                          
+                               'labels' : self.makeDictStr(align="'left'",
+                                                           x=5,
+                                                           format="''" if len(xAxisLabelSuffix) == 0 else "'{value}%s'" % xAxisLabelSuffix
+                                                           ),  
+                            'title' : "{text: 'foo'}",                            
                               'min' : xmin,
                               'max' : xmax
                              }
@@ -659,7 +657,6 @@ class Heatmap(ChartMaker):
                                 'maxPadding'  : 0,
                                 'startOnTick' : 'false',
                                 'endOnTick'   : 'false',
-                                'tickposition': [0, 6, 12, 18, 24],
                                 'min'         : ymin,
                                 'max'         : ymax,
                                 'reversed'    : 'true'
@@ -681,7 +678,7 @@ class Heatmap(ChartMaker):
                          "max: 25," +\
                          "startOnTick: false," +\
                          "endOnTick: false," +\
-                         "labels: {format: '{value}%s'}" % colorAxisSuffix +\
+                         "labels: {format: '{value}%s'}" % colorAxisLabelSuffix +\
                          "},"
                          )
 

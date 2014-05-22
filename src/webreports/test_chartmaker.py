@@ -88,13 +88,12 @@ class TestChartMaker(unittest.TestCase):
 
     #******@skipIf (not DO_ALL, 'comment me if do_all == False, and want to run this test')
     def testHeatmap(self):
-        heatChart = Heatmap('data/testHeatmapInput.csv',
+        #heatChart = Heatmap('data/testHeatmapInput.csv',
+        heatChart = Heatmap('data/videoByWeekCS145.csv',
                             chartTitle='Test Heatmap',
                             chartSubtitle='Test subtitle',
-                            xAxisLabels=['Jany', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'OCt', 'Nov', 'Dec'],
-                            xAxisLabelSuffix="\\'14",
                             yLabelSuffix=':00',
-                            colorAxisSuffix='C',
+                            colorAxisLabelSuffix='C',
                             rowsToSkip=1,
                             )
         html = ChartMaker.makeWebPage(heatChart)
